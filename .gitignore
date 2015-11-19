@@ -1,0 +1,5 @@
+node_modules/
+.idea/
+data/
+.DS_Store
+*npm-debug.log
