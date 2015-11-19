@@ -1,6 +1,6 @@
 {
   "name": "autohost-github-auth",
-  "version": "0.0.0",
+  "version": "1.0.0-beta",
   "description": "GitHub auth provider for autohost",
   "main": "src/index.js",
   "scripts": {},
