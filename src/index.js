@@ -1,5 +1,6 @@
 var _ = require( 'lodash' );
 var when = require( 'when' );
+var request = require( 'request' );
 var GitHubStrategy = require( 'passport-github2' ).Strategy;
 
 module.exports = function( config ) {
@@ -22,6 +23,29 @@ module.exports = function( config ) {
 
 	function serializeUser( user, done ) { done( null, user ); }
 
+	function validateUserOrg(accessToken, username, done) {
+		request({
+			method: "GET",
+			url: 'https://api.github.com/orgs/' + config.auth.github.organization + '/members/' + username,
+			headers: {
+				"User-Agent": "nodejs",
+				"Authorization": "token " + accessToken
+			},
+			json: true
+		}, function(err, res, body) {
+			if(err) {
+				return done(err);
+			}
+
+			if(res.statusCode !== 204) {
+				// This user ain't with us
+				return done(null, false);
+			}
+
+			done( null, true );
+		});
+	}
+
 	function initGitHubStrategy( config ) {
 		var github = new GitHubStrategy( {
 			clientID: config.auth.github.clientId,
@@ -33,7 +57,23 @@ module.exports = function( config ) {
 				// may wish to persist the user/profile here if we ever wish to map users to
 				// roles or permissions for more fine-grained control over what authenticated
 				// users can or can't do in the app
-				return done( null, profile );
+
+				if(!config.auth.github.organization) {
+					return done( null, profile );
+				}
+
+				validateUserOrg(accessToken, profile.username, function(err, isOrgMember) {
+					if(err) {
+						return done(err);
+					}
+
+					if(isOrgMember) {
+						done(null, profile);
+					} else {
+						done(null, false, { message: "User is not a member of the " + config.auth.github.organization + " organization." });
+					}
+				});
+
 			} );
 		} );
 
@@ -48,7 +88,7 @@ module.exports = function( config ) {
 		getUserRoles: function () { return when( [] ); },
 		hasUsers: function () { return when( true ); },
 		initPassport: function( passport ) {
-			githubAuth = passport.authenticate( 'github', { scope: ['user:email'], failureRedirect: config.auth.loginEndpoint, session: useSession } );
+			githubAuth = passport.authenticate( 'github', { scope: ['user:email', 'read:org'], failureMessage: !!config.auth.sessionMessages, failureRedirect: config.auth.loginEndpoint, session: useSession } );
 		},
 		serializeUser: serializeUser,
 		strategies: [
@@ -58,4 +98,4 @@ module.exports = function( config ) {
 	};
 
 	return wrapper;
-}
+};
