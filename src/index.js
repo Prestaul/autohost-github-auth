@@ -1,7 +1,7 @@
 var _ = require( 'lodash' );
 var when = require( 'when' );
-var request = require( 'request' );
 var GitHubStrategy = require( 'passport-github2' ).Strategy;
+var githubApi = require( './githubApi' );
 
 module.exports = function( config ) {
 	var githubAuth;
@@ -27,53 +27,18 @@ module.exports = function( config ) {
 		done( null, user );
 	}
 
-	function validateUserOrg( accessToken, username, org, done ) {
-		request( {
-			method: "GET",
-			url: 'https://api.github.com/orgs/' + org + '/members/' + username,
-			headers: {
-				"User-Agent": "nodejs",
-				"Authorization": "token " + accessToken
-			}
-		}, function( err, res ) {
-			if( err ) {
-				return done( err );
-			}
-
-			if( res.statusCode !== 204 ) {
-				// This user ain't with us
-				return done( null, false );
-			}
-
-			done( null, true );
-		} );
-	}
-
-	function loadUserTeams( accessToken, done ) {
-		request( {
-			method: "GET",
-			url: 'https://api.github.com/user/teams',
-			headers: {
-				"User-Agent": "nodejs",
-				"Authorization": "token " + accessToken
-			},
-			json: true
-		}, function( err, res, body ) {
-			done( err, body );
-		} );
-	}
-
 	function loadUserRoles( accessToken, teamRoleMap, defaultRoles, org, done ) {
 		if( !teamRoleMap ) {
 			return done( null, defaultRoles );
 		}
 
-		loadUserTeams( accessToken, function( err, teams ) {
+		githubApi.loadUserTeams( accessToken, function( err, teams ) {
 			if( err ) {
 				return done( err );
 			}
 
 			var roles = teams.reduce( function( roles, team ) {
+				console.log("TEAM!!:", team.name, team.organization.login);
 				if( team.organization.login !== org ) {
 					return roles;
 				}
@@ -120,7 +85,9 @@ module.exports = function( config ) {
 					return done( null, profile );
 				}
 
-				validateUserOrg( accessToken, profile.username, org, function( err, isOrgMember ) {
+				console.log("githubApi", githubApi);
+
+				githubApi.validateUserOrg( accessToken, profile.username, org, function( err, isOrgMember ) {
 					if( err ) {
 						return done( err );
 					}
@@ -135,6 +102,9 @@ module.exports = function( config ) {
 						}
 
 						profile.roles = roles;
+
+						console.log("PROFILE!!", profile);
+
 						done( null, profile );
 					} );
 				} );
