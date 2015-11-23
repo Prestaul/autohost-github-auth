@@ -19,34 +19,92 @@ module.exports = function( config ) {
 		res.redirect( config.auth.loginEndpoint );
 	}
 
-	function deserializeUser( user, done ) { done( null, user); }
+	function deserializeUser( user, done ) {
+		done( null, user);
+	}
 
-	function serializeUser( user, done ) { done( null, user ); }
+	function serializeUser( user, done ) {
+		done( null, user );
+	}
 
-	function validateUserOrg(accessToken, username, done) {
-		request({
+	function validateUserOrg( accessToken, username, org, done ) {
+		request( {
 			method: "GET",
-			url: 'https://api.github.com/orgs/' + config.auth.github.organization + '/members/' + username,
+			url: 'https://api.github.com/orgs/' + org + '/members/' + username,
+			headers: {
+				"User-Agent": "nodejs",
+				"Authorization": "token " + accessToken
+			}
+		}, function( err, res ) {
+			if( err ) {
+				return done( err );
+			}
+
+			if( res.statusCode !== 204 ) {
+				// This user ain't with us
+				return done( null, false );
+			}
+
+			done( null, true );
+		} );
+	}
+
+	function loadUserTeams( accessToken, done ) {
+		request( {
+			method: "GET",
+			url: 'https://api.github.com/user/teams',
 			headers: {
 				"User-Agent": "nodejs",
 				"Authorization": "token " + accessToken
 			},
 			json: true
-		}, function(err, res, body) {
-			if(err) {
-				return done(err);
+		}, function( err, res, body ) {
+			done( err, body );
+		} );
+	}
+
+	function loadUserRoles( accessToken, teamRoleMap, defaultRoles, org, done ) {
+		if( !teamRoleMap ) {
+			return done( null, defaultRoles );
+		}
+
+		loadUserTeams( accessToken, function( err, teams ) {
+			if( err ) {
+				return done( err );
 			}
 
-			if(res.statusCode !== 204) {
-				// This user ain't with us
-				return done(null, false);
-			}
+			var roles = teams.reduce( function( roles, team ) {
+				if( team.organization.login !== org ) {
+					return roles;
+				}
 
-			done( null, true );
+				return roles.concat( teamRoleMap[ team.name.toLowerCase() ] || [] );
+			}, [] );
+
+			done( null, _.uniq( roles.concat( defaultRoles ) ) );
 		});
 	}
 
 	function initGitHubStrategy( config ) {
+		var org = config.auth.github.organization;
+		var roles = config.auth.roles;
+		var defaultRoles = config.auth.defaultRoles || [];
+
+		// Create map of team->roles for faster lookup
+		var teamRoleMap = roles && _.reduce( roles, function( map, teams, role ) {
+			teams.forEach( function( team ) {
+				team = team.toLowerCase();
+
+				if( !map[ team ] ) {
+					map[ team ] = [];
+				}
+
+				map[ team ].push( role );
+			} );
+
+			return map;
+		}, {} );
+
 		var github = new GitHubStrategy( {
 			clientID: config.auth.github.clientId,
 			clientSecret: config.auth.github.clientSecret,
@@ -58,21 +116,28 @@ module.exports = function( config ) {
 				// roles or permissions for more fine-grained control over what authenticated
 				// users can or can't do in the app
 
-				if(!config.auth.github.organization) {
+				if( !org ) {
 					return done( null, profile );
 				}
 
-				validateUserOrg(accessToken, profile.username, function(err, isOrgMember) {
-					if(err) {
-						return done(err);
+				validateUserOrg( accessToken, profile.username, org, function( err, isOrgMember ) {
+					if( err ) {
+						return done( err );
 					}
 
-					if(isOrgMember) {
-						done(null, profile);
-					} else {
-						done(null, false, { message: "User is not a member of the " + config.auth.github.organization + " organization." });
+					if( !isOrgMember ) {
+						return done( null, false, { message: "User is not a member of the " + org + " organization." } );
 					}
-				});
+
+					loadUserRoles( accessToken, teamRoleMap, defaultRoles, org, function( err, roles ) {
+						if( err ) {
+							return done( err );
+						}
+
+						profile.roles = roles;
+						done( null, profile );
+					} );
+				} );
 
 			} );
 		} );
@@ -85,7 +150,9 @@ module.exports = function( config ) {
 		checkPermission: function () { return when( true ); },
 		deserializeUser: deserializeUser,
 		getActionRoles: function () { return []; },
-		getUserRoles: function () { return when( [] ); },
+		getUserRoles: function (user) {
+			return when( user.roles );
+		},
 		hasUsers: function () { return when( true ); },
 		initPassport: function( passport ) {
 			githubAuth = passport.authenticate( 'github', { scope: ['user:email', 'read:org'], failureMessage: !!config.auth.sessionMessages, failureRedirect: config.auth.loginEndpoint, session: useSession } );
