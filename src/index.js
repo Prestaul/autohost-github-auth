@@ -38,7 +38,6 @@ module.exports = function( config ) {
 			}
 
 			var roles = teams.reduce( function( roles, team ) {
-				console.log("TEAM!!:", team.name, team.organization.login);
 				if( team.organization.login !== org ) {
 					return roles;
 				}

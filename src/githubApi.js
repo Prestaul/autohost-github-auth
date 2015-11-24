@@ -1,38 +1,44 @@
+var pkg = require( "../package.json" );
+var url = require( "url" );
 var request = require( "request" );
+
+function fetch( token, path, done ) {
+	request( {
+		method: "GET",
+		url: url.resolve( "https://api.github.com", path),
+		headers: {
+			"User-Agent": "autohost-github-auth/" + pkg.version,
+			"Authorization": "token " + token
+		},
+		json: true
+	}, function( err, res, body ) {
+		if ( err ) {
+			return done( err );
+		}
+
+		if ( res.statusCode < 200 || res.statusCode >= 300 ) {
+			return done( new Error( "HTTP error. Status: " + res.statusCode ), res, body );
+		}
+
+		return done( null, res, body );
+	} );
+};
 
 module.exports = {
 	validateUserOrg: function ( accessToken, username, org, done ) {
-		request( {
-			method: "GET",
-			url: 'https://api.github.com/orgs/' + org + '/members/' + username,
-			headers: {
-				"User-Agent": "nodejs",
-				"Authorization": "token " + accessToken
-			}
-		}, function( err, res ) {
-			if( err ) {
-				return done( err );
+		var path = "/orgs/" + org + "/members/" + username;
+		return fetch( accessToken, path, function ( err, res, body ) {
+			if ( res ) {
+				return done( null, res.statusCode === 204 );
 			}
 
-			if( res.statusCode !== 204 ) {
-				// This user ain't with us
-				return done( null, false );
-			}
-
-			done( null, true );
+			done( err, false );
 		} );
 	},
 
 	loadUserTeams: function ( accessToken, done ) {
-		request( {
-			method: "GET",
-			url: 'https://api.github.com/user/teams',
-			headers: {
-				"User-Agent": "nodejs",
-				"Authorization": "token " + accessToken
-			},
-			json: true
-		}, function( err, res, body ) {
+		var path = "/user/teams";
+		fetch( accessToken, path, function ( err, res, body ) {
 			done( err, body );
 		} );
 	}
