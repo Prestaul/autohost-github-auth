@@ -1,7 +1,5 @@
-var _ = require( 'lodash' );
 var when = require( 'when' );
-var GitHubStrategy = require( 'passport-github2' ).Strategy;
-var githubApi = require( './githubApi' );
+var githubStrategy = require( './githubStrategy' );
 
 module.exports = function( config ) {
 	var githubAuth;
@@ -27,93 +25,6 @@ module.exports = function( config ) {
 		done( null, user );
 	}
 
-	function loadUserRoles( accessToken, teamRoleMap, defaultRoles, org, done ) {
-		if( !teamRoleMap ) {
-			return done( null, defaultRoles );
-		}
-
-		githubApi.loadUserTeams( accessToken, function( err, teams ) {
-			if( err ) {
-				return done( err );
-			}
-
-			var roles = teams.reduce( function( roles, team ) {
-				if( team.organization.login !== org ) {
-					return roles;
-				}
-
-				return roles.concat( teamRoleMap[ team.name.toLowerCase() ] || [] );
-			}, [] );
-
-			done( null, _.uniq( roles.concat( defaultRoles ) ) );
-		});
-	}
-
-	function initGitHubStrategy( config ) {
-		var org = config.auth.github.organization;
-		var roles = config.auth.roles;
-		var defaultRoles = config.auth.defaultRoles || [];
-
-		// Create map of team->roles for faster lookup
-		var teamRoleMap = roles && _.reduce( roles, function( map, teams, role ) {
-			teams.forEach( function( team ) {
-				team = team.toLowerCase();
-
-				if( !map[ team ] ) {
-					map[ team ] = [];
-				}
-
-				map[ team ].push( role );
-			} );
-
-			return map;
-		}, {} );
-
-		var github = new GitHubStrategy( {
-			clientID: config.auth.github.clientId,
-			clientSecret: config.auth.github.clientSecret,
-			callbackUrl: config.auth.github.callbackUrl
-		}, function( accessToken, refreshToken, profile, done ) {
-			process.nextTick( function() {
-				// TODO: do we want to do anything here with authorized profile information?
-				// may wish to persist the user/profile here if we ever wish to map users to
-				// roles or permissions for more fine-grained control over what authenticated
-				// users can or can't do in the app
-
-				if( !org ) {
-					return done( null, profile );
-				}
-
-				console.log("githubApi", githubApi);
-
-				githubApi.validateUserOrg( accessToken, profile.username, org, function( err, isOrgMember ) {
-					if( err ) {
-						return done( err );
-					}
-
-					if( !isOrgMember ) {
-						return done( null, false, { message: "User is not a member of the " + org + " organization." } );
-					}
-
-					loadUserRoles( accessToken, teamRoleMap, defaultRoles, org, function( err, roles ) {
-						if( err ) {
-							return done( err );
-						}
-
-						profile.roles = roles;
-
-						console.log("PROFILE!!", profile);
-
-						done( null, profile );
-					} );
-				} );
-
-			} );
-		} );
-
-		return github;
-	}
-
 	var wrapper = {
 		authenticate: authenticate,
 		checkPermission: function () { return when( true ); },
@@ -128,7 +39,7 @@ module.exports = function( config ) {
 		},
 		serializeUser: serializeUser,
 		strategies: [
-			initGitHubStrategy( config )
+			githubStrategy( config.auth )
 		],
 		updateActions: function () { return when( true ); }
 	};

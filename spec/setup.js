@@ -1,5 +1,5 @@
 global.when = require( "when" );
-var chai = require( "chai" );
+global.chai = require( "chai" );
 chai.use( require( "chai-as-promised" ) );
 global.should = chai.should();
 global.expect = chai.expect;
@@ -9,6 +9,7 @@ global.sinon = require( "sinon" );
 /*eslint-disable */
 var sap = require( "sinon-as-promised" );
 chai.use( require( "sinon-chai" ) );
+chai.use( require( "chai-passport-strategy" ) );
 /*eslint-enable */
 global.proxyquire = require( "proxyquire" ).noPreserveCache().noCallThru();
 global.nock = require( "nock" );

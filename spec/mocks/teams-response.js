@@ -2,19 +2,19 @@ module.exports = [
 	{
 		name: "Developers",
 		organization: {
-			login: "UrDad"
+			login: "UrMom"
 		}
 	},
 	{
 		name: "Developers",
 		organization: {
-			login: "UrMom"
+			login: "ExampleInc"
 		}
 	},
 	{
 		name: "Testers",
 		organization: {
-			login: "UrMom"
+			login: "ExampleInc"
 		}
 	}
 ];
