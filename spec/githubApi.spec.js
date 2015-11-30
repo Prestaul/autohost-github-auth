@@ -41,14 +41,14 @@ describe( "GitHubApi wrapper", function () {
 				done();
 			} );
 		} );
-		it( "should fail when the incorrect token is sent with the request", function ( done ) {
+		it( "should respond with an error when the incorrect token is sent with the request", function ( done ) {
 			var path = "/orgs/ExampleInc/members/somedeveloperusername";
 			nock( "https://api.github.com/" )
 				.get( path )
 				.reply( 401 );
 
 			GitHubApi.validateUserOrg( "wrongToken", "somedeveloperusername", "ExampleInc", function ( err, isOrgMember ) {
-				should.not.exist( err );
+				should.exist( err );
 				done();
 			} );
 		} );

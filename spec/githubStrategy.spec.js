@@ -178,7 +178,7 @@ describe("GitHub Strategy Wrapper", function() {
 					.authenticate();
 			} );
 
-			it("should fail to authenticate", function() {
+			it("should fail to authorize", function() {
 				should.exist(error);
 			});
 
@@ -186,6 +186,37 @@ describe("GitHub Strategy Wrapper", function() {
 				error.should.eql( {
 					message: 'User is not a member of the ExampleInc organization.'
 				} );
+			});
+		});
+
+		describe("when github responds with an error checking the org membership", function() {
+			var error;
+
+			before( function( done ) {
+				nock( "https://api.github.com/" )
+					.get( "/orgs/ExampleInc/members/JohnnyDeveloper" )
+					.reply( 500, "That didn't work..." );
+
+				mockGithubCalls({});
+
+				chai.passport.use(strategy)
+					.error(function(err) {
+						error = err;
+						done();
+					})
+					.success(function() {
+						done( new Error("This should not get called...") );
+					})
+					.req(function(req) {
+						req.query = {};
+						req.query.code = 'THE_OATH_CODE';
+					})
+					.authenticate();
+			} );
+
+			it("should have an error result", function() {
+				should.exist( error );
+				error.should.be.an.instanceof(Error);
 			});
 		});
 	});
@@ -202,8 +233,147 @@ describe("GitHub Strategy Wrapper", function() {
 				admin: [ "Admins" ],
 				developer: [ "Developers", "Admins" ],
 				readonly: [ "Testers" ]
+			}
+		});
+
+		mockGetOAuthAccessToken( strategy );
+
+		describe("with authenticated user in org", function() {
+			var user;
+
+			before( function( done ) {
+				mockGithubCalls({
+					isOrgMember: true,
+					mockTeams: [{
+						name: "Developers",
+						organization: {
+							login: "ExampleInc"
+						}
+					}, {
+						name: "Admins",
+						organization: {
+							login: "ExampleInc"
+						}
+					}, {
+						name: "SomeOtherTeam",
+						organization: {
+							login: "ExampleInc"
+						}
+					}]
+				});
+
+				chai.passport.use(strategy)
+					.success(function(u) {
+						user = u;
+						done();
+					})
+					.req(function(req) {
+						req.query = {};
+						req.query.code = 'THE_OATH_CODE';
+					})
+					.authenticate();
+			} );
+
+			it("should load the user", function() {
+				user.should.be.an("object");
+				user.id.should.be.equal( '1337' );
+				user.username.should.be.equal( 'JohnnyDeveloper' );
+				user.displayName.should.be.equal( 'Johnny Developer' );
+				user.emails.should.eql([{
+					value: 'JohnnyDeveloper@example.net'
+				}]);
+			});
+
+			it("should add correct roles to the user", function() {
+				user.roles.should.eql([ 'developer', 'admin' ]);
+			});
+		});
+
+		describe("with authenticated user in multiple orgs", function() {
+			var user;
+
+			before( function( done ) {
+				mockGithubCalls({
+					isOrgMember: true,
+					mockTeams: [{
+						name: "Developers",
+						organization: {
+							login: "SomeOtherInc"
+						}
+					}, {
+						name: "Testers",
+						organization: {
+							login: "ExampleInc"
+						}
+					}]
+				});
+
+				chai.passport.use(strategy)
+					.success(function(u) {
+						user = u;
+						done();
+					})
+					.req(function(req) {
+						req.query = {};
+						req.query.code = 'THE_OATH_CODE';
+					})
+					.authenticate();
+			} );
+
+			it("should load the user", function() {
+				user.should.be.an("object");
+				user.id.should.be.equal( '1337' );
+			});
+
+			it("should not apply roles from other org's teams", function() {
+				user.roles.should.eql([ 'readonly' ]);
+			});
+		});
+
+		describe("when github responds with error retrieving teams", function() {
+			var error;
+
+			before( function( done ) {
+				nock( "https://api.github.com" )
+					.get( "/user/teams" )
+					.reply( 500, "That didn't work..." );
+
+				mockGithubCalls({
+					isOrgMember: true
+				});
+
+				chai.passport.use(strategy)
+					.error(function(err) {
+						error = err;
+						done();
+					})
+					.req(function(req) {
+						req.query = {};
+						req.query.code = 'THE_OATH_CODE';
+					})
+					.authenticate();
+			} );
+
+			it("should have an error result", function() {
+				should.exist( error );
+				error.should.be.an.instanceof(Error);
+			});
+		});
+	});
+
+	describe("configured with org, roles, and defaultRoles", function() {
+		var strategy = githubStrategy({
+			github: {
+				organization: "ExampleInc",
+				clientId: "THE_CLIENT_ID",
+				clientSecret: "THE_CLIENT_SECRET"
 			},
-			defaultRoles: [ "user" ]
+			roles: {
+				admin: [ "Admins" ],
+				developer: [ "Developers", "Admins" ],
+				readonly: [ "Testers" ]
+			},
+			defaultRoles: [ "user", "friend" ]
 		});
 
 		mockGetOAuthAccessToken( strategy );
@@ -245,7 +415,7 @@ describe("GitHub Strategy Wrapper", function() {
 			});
 
 			it("should add correct roles to the user", function() {
-				user.roles.should.eql([ 'developer', 'user' ]);
+				user.roles.should.eql([ 'developer', 'user', 'friend' ]);
 			});
 		});
 	});
