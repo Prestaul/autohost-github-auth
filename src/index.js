@@ -3,7 +3,7 @@ var githubStrategy = require( './githubStrategy' );
 
 module.exports = function( config ) {
 	var githubAuth;
-	var useSession = !( config == undefined ? false : config.noSession );
+	var useSession = !( config && config.noSession );
 
 	function authenticate( req, res, next ) {
 		if ( req.path.indexOf( config.auth.authEndpoint ) === 0 ) {
