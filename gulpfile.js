@@ -1,10 +1,12 @@
 var gulp = require( 'gulp' ),
-	mocha = require( 'gulp-mocha' );
+	bg = require( 'biggulp' )( gulp );
 
 gulp.task( 'test', function() {
-	gulp.src( './spec/*.spec.js' )
-		.pipe( mocha( { reporter: 'spec' } ) )
-		.on( 'error', function( err ) { console.log( err.stack ); } );
+	bg.testAll();
+} );
+
+gulp.task( 'coverage', function() {
+	bg.withCoverage();
 } );
 
 gulp.task( 'watch', function() {

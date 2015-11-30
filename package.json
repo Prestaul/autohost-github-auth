@@ -36,6 +36,7 @@
     "when": "~3.1.0"
   },
   "devDependencies": {
+    "biggulp": "^0.2.2",
     "chai": "^3.4.1",
     "chai-as-promised": "^5.1.0",
     "chai-passport-strategy": "^0.2.0",
